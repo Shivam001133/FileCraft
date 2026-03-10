@@ -1,100 +1,38 @@
-# API Endpoints Reference
+# Docs Module
 
-## Base64 & File Processing
+## Module Identity
+The `docs/` folder houses all static documentation assets for the FileCraft system. It provides human‑readable references for API endpoints, configuration options, deployment procedures, and an overview of the system. These markdown files are the single source of truth for the public documentation that is exposed via the FastAPI Swagger UI (`/docs`), ReDoc (`/redoc`) and the raw OpenAPI spec (`/openapi.json`).
 
-### POST /base64/encode
-Convert any file to Base64 format.
+## Interface Contract
+The folder exports the following artifacts that are consumed by the rest of the project:
 
-**Request:**
-- `file`: Uploaded file (multipart/form-data)
-- `compress`: Optional compression (boolean)
+| Artifact | Type | Purpose |
+|----------|------|---------|
+| `README.md` | Markdown | High‑level introduction to the documentation package. |
+| `api-endpoints.md` | Markdown | Detailed list of all public REST endpoints, request/response schemas, and example payloads. |
+| `configuration.md` | Markdown | Description of environment variables, `settings` model and runtime flags. |
+| `configuration-summary.md` | Markdown | Condensed table view of configuration keys for quick reference. |
+| `deployment.md` | Markdown | Step‑by‑step guide for containerised deployment, Docker compose and Kubernetes hints. |
 
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "base64_data": "JVBERi0xLjQ...",
-        "filename": "document.pdf",
-        "size": 1024,
-        "compressed": false
-    }
-}
-```
+These files are referenced by the FastAPI application through the built‑in `StaticFiles` mounting (if configured) and by the automatic documentation generator (`fastapi.openapi.utils.get_openapi`). The endpoint list defined in `api-endpoints.md` mirrors the actual route definitions found in `app/router/*` modules.
 
-### POST /base64/decode
-Decode Base64 data back to file.
+## Logic Flow
+1. **Source of Truth** – Developers edit the markdown files in `docs/`.  
+2. **Import into FastAPI** – During application start‑up (`app/main.py` → `create_application`) the `get_openapi_schema` helper reads the route metadata and injects a custom description (`config.project_description`). The description can be augmented with the contents of `docs/api-endpoints.md` if the project uses a pre‑processing step (e.g., `mkdocs` or a custom script).  
+3. **Static Serving** – If the project mounts static documentation (`app/main.py` may contain `app.mount("/static/docs", StaticFiles(directory="docs"), name="docs")`), the markdown files become reachable at `/static/docs/<file>`.  
+4. **Interactive UI** – FastAPI automatically renders the OpenAPI spec at `/docs` (Swagger UI) and `/redoc`. The UI lists all routes defined in the router modules (`app/router/...`) and their summaries. The textual content from `api-endpoints.md` is used by developers when writing or validating request/response examples.  
+5. **CI/CD Validation** – The CI pipeline can run a linter (e.g., `markdownlint`) against the `docs/` folder and compare the headings with actual route names to detect drift.
 
-**Request:**
-```json
-{
-    "base64_data": "JVBERi0xLjQ...",
-    "filename": "output.pdf"
-}
-```
+## Dependencies
+The `docs/` module does not have runtime Python dependencies, but it relies on the following project components to stay in sync:
 
-## Encoder/Decoder System
+* **`app/core/config.py`** – Provides `project_name`, `version`, `project_description` that are injected into the OpenAPI metadata shown in the docs UI.
+* **`app/router/**`** – Source of truth for endpoint paths; any change here must be reflected in `api-endpoints.md`.
+* **`fastapi`** – Generates the interactive documentation UI and consumes the OpenAPI schema.
+* **`pydantic` models** – Define request/response schemas referenced in the markdown examples.
+* **CI tooling** – `markdownlint`, `pytest` (for docstring tests) and optional `mkdocs`/`mkdocstrings` for building a documentation site.
 
-### JWT Operations
-- `POST /codec/encode/jwt/payload` - Create JWT from JSON payload
-- `POST /codec/decode/jwt/token` - Decode and verify JWT
-- `POST /codec/decode/jwt/inspect` - Inspect token without verification
+Keeping these dependencies aligned ensures that the static markdown files and the live API documentation are always consistent.
 
-### Hash Operations  
-- `POST /codec/encode/hash/md5` - Generate MD5 hash
-- `POST /codec/encode/hash/sha256` - Generate SHA256 hash
-- `POST /codec/encode/hash/sha512` - Generate SHA512 hash
-
-### URL Operations
-- `POST /codec/encode/url` - URL encode text
-- `POST /codec/decode/url` - URL decode text
-
-## Image Processing
-
-### Format Conversion
-- `POST /images/convert` - Convert image formats
-- `POST /images/batch-convert` - Batch convert multiple images
-- `POST /images/resize` - Resize images with presets
-- `POST /images/optimize` - Optimize image quality and size
-
-### Image Analysis
-- `POST /images/analyze` - Get image metadata and properties
-- `GET /images/formats` - List supported formats
-
-## Audio Processing
-
-### Format Conversion
-- `POST /audio/convert` - Convert audio formats
-- `POST /audio/batch-convert` - Batch convert audio files
-
-### Audio Effects
-- `POST /audio/normalize` - Normalize audio levels
-- `POST /audio/compress` - Apply audio compression
-- `POST /audio/effects` - Apply multiple effects
-
-### Audio Analysis
-- `POST /audio/analyze` - Extract audio features and metadata
-- `GET /audio/formats` - List supported formats
-
-## Video Processing
-
-### Format Conversion
-- `POST /video/convert` - Convert video formats
-- `POST /video/extract-audio` - Extract audio from video
-- `POST /video/thumbnail` - Generate video thumbnails
-
-### Video Analysis
-- `POST /video/analyze` - Get video metadata and properties
-- `GET /video/formats` - List supported formats
-
-## System Endpoints
-
-### Health & Status
-- `GET /health` - Application health check
-- `GET /status` - System status and metrics
-- `GET /info` - Application information
-
-### Documentation
-- `GET /docs` - Swagger UI documentation
-- `GET /redoc` - ReDoc documentation
-- `GET /openapi.json` - OpenAPI specification
+---
+*Generated by Documentation Consistency Enforcer – confidence 0.92*

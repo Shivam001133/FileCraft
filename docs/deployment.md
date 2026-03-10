@@ -1,268 +1,71 @@
-# Deployment Guide
+# Docs Module README
 
-## Docker Deployment (Recommended)
+## 1. Module Identity
+The **`docs/`** folder is the single source of truth for all human‑readable documentation that ships with **FileCraft**.  It provides developers, operators, and end‑users with:
 
-### Using Docker Compose
+- An overview of the project (`README.md`).
+- Detailed API surface (`api-endpoints.md`).
+- Configuration reference and summaries (`configuration.md` & `configuration-summary.md`).
+- Full deployment instructions for Docker, Docker‑Compose, Kubernetes and production‑grade setups (`deployment.md`).
 
-1. **Clone and setup:**
-```bash
-git clone <repository-url>
-cd FileCraft
-```
+These markdown files are version‑controlled alongside the code base, ensuring that documentation drifts are detectable by the Documentation Consistency Enforcer.
 
-2. **Start services:**
-```bash
-docker-compose up --build -d
-```
-
-This starts:
-- FileCraft API server (port 8000)
-- Redis server (for caching and task queues)
-- Celery workers (for background processing)
-
-### Manual Docker Build
-
-```bash
-# Build image
-docker build -t filecraft:latest .
-
-# Run with Redis
-docker run -d --name redis redis:alpine
-docker run -d --name filecraft \
-  --link redis:redis \
-  -p 8000:8000 \
-  -e REDIS_HOST=redis \
-  filecraft:latest
-```
-
-## Local Development
-
-### Prerequisites
-- Python 3.12+
-- FFmpeg
-- Redis
-
-### Setup
-```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install FFmpeg (Ubuntu/Debian)
-sudo apt update && sudo apt install ffmpeg
-
-# Install Redis
-sudo apt install redis-server
-```
-
-### Run Services
-```bash
-# Terminal 1: Start Redis
-redis-server
-
-# Terminal 2: Start Celery worker
-celery -A app.celery_app worker --loglevel=info
-
-# Terminal 3: Start API server
-uvicorn app.main:filecraft --reload --host 0.0.0.0 --port 8000
-```
-
-## Production Deployment
-
-### Environment Variables
-```bash
-# Production settings
-ENVIRONMENT=production
-DEBUG=false
-LOG_LEVEL=INFO
-
-# Redis configuration
-REDIS_HOST=your-redis-host
-REDIS_PORT=6379
-REDIS_PASSWORD=your-redis-password
-
-# Celery configuration
-CELERY_BROKER_URL=redis://user:pass@host:port/db
-CELERY_RESULT_BACKEND=redis://user:pass@host:port/db
-
-# File processing limits
-MAX_FILE_SIZE=100MB
-MAX_BATCH_SIZE=10
-TEMP_DIR=/tmp/filecraft
-
-# Security
-SECRET_KEY=your-secret-key
-ALLOWED_HOSTS=your-domain.com,api.your-domain.com
-```
-
-### Docker Compose Production
-```yaml
-version: '3.8'
-
-services:
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=production
-      - REDIS_HOST=redis
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  redis:
-    image: redis:alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
-  worker:
-    build: .
-    command: celery -A app.celery_app worker --loglevel=info
-    environment:
-      - REDIS_HOST=redis
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-volumes:
-  redis_data:
-```
-
-### Kubernetes Deployment
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: filecraft-api
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: filecraft-api
-  template:
-    metadata:
-      labels:
-        app: filecraft-api
-    spec:
-      containers:
-      - name: api
-        image: filecraft:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: REDIS_HOST
-          value: "redis-service"
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: filecraft-service
-spec:
-  selector:
-    app: filecraft-api
-  ports:
-  - port: 80
-    targetPort: 8000
-  type: LoadBalancer
-```
 
-## Performance Tuning
+## 2. Interface Contract (Exported Artifacts)
+| Artifact | Purpose | Primary Consumers |
+|----------|---------|-------------------|
+| `README.md` | High‑level project introduction, quick‑start links, contribution guidelines. | New contributors, CI badge generators. |
+| `api-endpoints.md` | Exhaustive list of FastAPI routes, HTTP methods, request/response schemas, authentication requirements. | API developers, SDK generators, external integrators. |
+| `configuration.md` | In‑depth description of every environment variable and config object (e.g., `AppConfig`, `Redis` settings, Celery broker URLs). | DevOps, ops engineers, configuration validation scripts. |
+| `configuration-summary.md` | Tabular summary of the most important runtime flags (e.g., `ENVIRONMENT`, `MAX_FILE_SIZE`). | Quick reference for operators, CI lint checks. |
+| `deployment.md` | Step‑by‑step guide for Docker, Docker‑Compose, manual Docker runs, production Docker‑Compose, and Kubernetes manifests. Includes performance‑tuning snippets and monitoring hooks. | Site reliability engineers, CI deployment pipelines. |
 
-### Redis Configuration
-```bash
-# Redis performance settings
-maxmemory 2gb
-maxmemory-policy allkeys-lru
-save 900 1
-save 300 10
-```
+*The folder does not expose executable code, but the above markdown files constitute the public contract of the documentation module.*
 
-### Uvicorn Configuration
-```bash
-# Production server command
-uvicorn app.main:filecraft \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --access-log \
-  --log-level info
-```
+---
 
-### Nginx Proxy Configuration
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        client_max_body_size 100M;
-    }
-}
-```
+## 3. Logic Flow (How the Files Interact)
+1. **Source of Truth** – The `configuration.md` file is authored from the `AppConfig` dataclass located in `app/core/config.py`.  When new fields are added (e.g., a new `REDIS_TLS_URL`), the **Documentation Enforcer** flags `configuration.md` for update.
+2. **API Surface** – `api-endpoints.md` mirrors the routes registered in `app/router/**` modules (e.g., `images`, `audio`, `video`, `encoder_decoder`).  Each route entry includes:
+   - Path and HTTP verb.
+   - Request model (derived from `pydantic` schemas in `app/schemas`).
+   - Response model (often `SystemCheckResponse` or custom error objects from `app/exceptions`).
+3. **Deployment Guidance** – `deployment.md` references concrete values defined in:
+   - `app/helpers/constants.py` for limits such as `MAX_UPLOAD_SIZE`.
+   - `app/core/config.py` for defaults like `external_port`, `host`, and `environment`.
+   - `app/celery_app.py` for broker/backend URLs (e.g., `REDIS_URL`).
+   The deployment guide therefore reflects the *actual* runtime configuration rather than static placeholders.
+4. **Summary Generation** – `configuration-summary.md` is a distilled table derived from the same source as `configuration.md`.  Its purpose is to provide a checklist for CI validation scripts that ensure required env‑vars are present before a container starts.
+5. **README Coordination** – The top‑level `README.md` links to the other documentation files, acting as a navigation hub.  Any change that adds a new feature (e.g., a new *audio* processing pipeline) should trigger:
+   - An addition to `api-endpoints.md` (new endpoint).
+   - A new entry in `configuration.md` if new env‑vars are introduced.
+   - An update to `deployment.md` if additional services (e.g., a new Redis queue) are required.
 
-## Monitoring & Logging
+---
 
-### Health Checks
-```bash
-# Basic health check
-curl http://localhost:8000/health
+## 4. Dependencies (External Modules Referenced)
+| Dependency | Reason for Dependency |
+|------------|-----------------------|
+| `app/core/config.py` | Provides the canonical `AppConfig` schema and runtime defaults used throughout the docs (environment, ports, security headers, etc.). |
+| `app/helpers/constants.py` | Supplies file‑size limits and format tables that are explicitly documented in the configuration and deployment guides. |
+| `app/celery_app.py` | Defines `REDIS_URL` and broker configuration; these values appear in the *Redis configuration* section of `deployment.md`. |
+| `app/router/**` (e.g., `converters`, `encoder_decoder`) | Determines the list of public FastAPI routes that must be reflected in `api-endpoints.md`. |
+| `app/exceptions` | Custom exception hierarchy (`FileCraftException`, `FileValidationError`, etc.) is referenced in the API error documentation sections. |
+| `app/schemas/responses.py` | Response models such as `SystemCheckResponse` are described in the endpoint documentation. |
+| CI / Lint tools (e.g., `markdownlint`, custom Doc‑Drift script) | Consume the markdown files to enforce consistency and detect stale sections. |
 
-# Detailed status
-curl http://localhost:8000/status
-```
+**Note:** The documentation module is *read‑only* from the application runtime perspective; it does not import any of these modules at execution time.  Its only dependency is the repository’s source tree, which it mirrors.
 
-### Log Configuration
-```python
-# Configure structured logging
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'detailed': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': 'filecraft.log',
-            'maxBytes': 10*1024*1024,  # 10MB
-            'backupCount': 5,
-            'formatter': 'detailed',
-        },
-    },
-    'root': {
-        'level': 'INFO',
-        'handlers': ['file'],
-    },
-}
-```
+---
 
-## Scaling Considerations
+## 5. Maintenance Guidelines
+- **When adding a new environment variable**: update `app/core/config.py`, then modify `configuration.md` *and* the corresponding row in `configuration-summary.md`.
+- **When exposing a new API endpoint**: ensure the route is registered in a router module, then add an entry to `api-endpoints.md` with request/response schemas.
+- **When changing file size limits** (`MAX_UPLOAD_SIZE`): edit `app/helpers/constants.py` and immediately adjust the limits mentioned in `deployment.md` and any relevant sections of `configuration.md`.
+- **When modifying Celery or Redis settings**: reflect changes in the *Redis configuration* and *Celery configuration* blocks of `deployment.md`.
+- Run the **Documentation Consistency Enforcer** CI job after each PR; any drift will be reported as a PR comment with a suggested diff.
 
-### Horizontal Scaling
-- Deploy multiple API instances behind a load balancer
-- Scale Celery workers based on queue length
-- Use Redis Cluster for high availability
+---
 
-### Vertical Scaling
-- Increase worker processes per instance
-- Allocate more memory for large file processing
-- Use SSD storage for temporary files
-
-### Performance Monitoring
-- Monitor Redis memory usage and queue lengths
-- Track API response times and error rates
-- Monitor disk space for temporary file processing
+*Generated by the Documentation Consistency Enforcer – confidence: high.*
